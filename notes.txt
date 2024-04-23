@@ -1,0 +1,4 @@
+https://infinite-api.tcgplayer.com/priceguide/set/<set number>/cards/?rows=5000
+
+https://mpapi.tcgplayer.com/v2/product/<product_id>/pricepoints
+    https://www.reddit.com/r/sheets/comments/ywfyne/help_selecting_formula_for_pulling_price_data/
