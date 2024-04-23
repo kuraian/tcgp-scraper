@@ -1,27 +1,32 @@
+import undetected_chromedriver as uc
+from seleniumrequests.request import RequestsSessionMixin
 import requests
 import json
 import random
 import time
 import os
-import threading
-import config
-
-API_KEY = config.scrapeops_key
 
 
-def agent_generator():
-    response = requests.get(
-        f"http://headers.scrapeops.io/v1/user-agents?api_key={API_KEY}")
-    results_list = response.json()["result"]
-    random_index = random.randint(0, len(results_list) - 1)
-    random_agent = results_list[random_index]
-
-    return random_agent
+class MyCustomWebDriver(RequestsSessionMixin, uc.Chrome):
+    pass
 
 
-def header_generator():
-    headers = {}
-    return headers
+def payload_generator(n):
+    """Generates a payload for a given offset
+    Args:
+        n: the current offset, starts at 1
+    Returns:
+        A JSON payload for a POST request to
+            https://mpapi.tcgplayer.com/v2/product/{id}/latestsales
+    """
+
+    payload = {
+        "listingType": "All",
+        "offset": n*25,
+        "limit": 25,
+        "time": round(time.time() * 1000)
+    }
+    return payload
 
 
 def get_cards(set_id):
@@ -48,6 +53,14 @@ def get_cards(set_id):
 
 
 def get_card_ids(set_id, cards):
+    """extracts the card_ids from a collection of cards
+    Args:
+        set_id:
+        cards: dict of cards
+    Returns:
+        list of unique card_ids
+    """
+
     card_ids = set()
     for card in cards["result"]:
         card_ids.add(card["productID"])
@@ -62,24 +75,6 @@ def get_card_ids(set_id, cards):
     return card_ids
 
 
-def payload_generator(n):
-    """Generates a payload for a given offset
-    Args:
-        n: the current offset, starts at 1
-    Returns:
-        A JSON payload for a POST request to
-            https://mpapi.tcgplayer.com/v2/product/{id}/latestsales
-    """
-
-    payload = {
-        "listingType": "All",
-        "offset": n*25,
-        "limit": 25,
-        "time": round(time.time() * 1000)
-    }
-    return payload
-
-
 def get_card_sales(set_id, card_id):
     """Gets all card sales for a given card id
     Args:
@@ -92,12 +87,13 @@ def get_card_sales(set_id, card_id):
     offset = 1
     next_page = True
     sales = []
+    api_url = f"https://mpapi.tcgplayer.com/v2/product/{card_id}/latestsales?mpfev=2372"
 
     try:
+        custom_webdriver = MyCustomWebDriver()
         while next_page:
-            payload = payload_generator(offset)
-            response = requests.post(
-                f"https://mpapi.tcgplayer.com/v2/product/{card_id}/latestsales?mpfev=2372", json=payload)
+            response = custom_webdriver.request(
+                "POST", api_url, json=payload_generator(offset))
             data = response.json()
             sales.extend(data["data"])
             if not data["nextPage"] == "Yes":
@@ -106,7 +102,10 @@ def get_card_sales(set_id, card_id):
                 time.sleep(random.triangular(1.2, 2.3))
                 offset += 1
     except Exception as e:
-        print(f"Error for card {card_id}. {response}")
+        print(f"Error for card {card_id}.")
+
+    custom_webdriver.close()
+    time.sleep(1)
 
     path = f"sets/{set_id}"
     if not os.path.isdir(path):
@@ -114,6 +113,7 @@ def get_card_sales(set_id, card_id):
     with open(f"{path}/{card_id}.json", "w") as f:
         f.write(json.dumps({"sales": sales}, indent=4))
         f.close()
+
     return sales
 
 
@@ -127,12 +127,8 @@ def main():
 
     threads = []
     for card_id in card_ids:
-        thread = threading.Thread(
-            target=get_card_sales, args=(set_id, card_id))
-        thread.start()
-        threads.append(thread)
-    for thread in threads:
-        thread.join()
+        get_card_sales(set_id, card_id)
+        break
 
 
 if __name__ == "__main__":
