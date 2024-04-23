@@ -3,12 +3,13 @@ import json
 import random
 import time
 import os
+import threading
 import config
 
 API_KEY = config.scrapeops_key
 
 
-def generate_agent():
+def agent_generator():
     response = requests.get(
         f"http://headers.scrapeops.io/v1/user-agents?api_key={API_KEY}")
     results_list = response.json()["result"]
@@ -16,6 +17,11 @@ def generate_agent():
     random_agent = results_list[random_index]
 
     return random_agent
+
+
+def header_generator():
+    headers = {}
+    return headers
 
 
 def get_cards(set_id):
@@ -39,6 +45,21 @@ def get_cards(set_id):
         cards = response.json()
         f.write(json.dumps(cards, indent=4))
     return cards
+
+
+def get_card_ids(set_id, cards):
+    card_ids = set()
+    for card in cards["result"]:
+        card_ids.add(card["productID"])
+    card_ids = list(card_ids)
+    path = f"sets/{set_id}"
+
+    if not os.path.isdir(path):
+        os.mkdir(path)
+    with open(path + "/card_ids.json", "w") as f:
+        f.write(json.dumps({"card_ids": card_ids}, indent=4))
+        f.close()
+    return card_ids
 
 
 def payload_generator(n):
@@ -72,23 +93,27 @@ def get_card_sales(set_id, card_id):
     next_page = True
     sales = []
 
-    while next_page:
-        payload = payload_generator(offset)
-        response = requests.post(
-            f"https://mpapi.tcgplayer.com/v2/product/{card_id}/latestsales?mpfev=2372", json=payload)
-        response = response.json()
-        sales.extend(response["data"])
-        if not response["nextPage"] == "Yes":
-            next_page = False
-        else:
-            time.sleep(random.triangular(1.2, 2.3))
-            offset += 1
+    try:
+        while next_page:
+            payload = payload_generator(offset)
+            response = requests.post(
+                f"https://mpapi.tcgplayer.com/v2/product/{card_id}/latestsales?mpfev=2372", json=payload)
+            data = response.json()
+            sales.extend(data["data"])
+            if not data["nextPage"] == "Yes":
+                next_page = False
+            else:
+                time.sleep(random.triangular(1.2, 2.3))
+                offset += 1
+    except Exception as e:
+        print(f"Error for card {card_id}. {response}")
 
     path = f"sets/{set_id}"
     if not os.path.isdir(path):
         os.mkdir(path)
     with open(f"{path}/{card_id}.json", "w") as f:
         f.write(json.dumps({"sales": sales}, indent=4))
+        f.close()
     return sales
 
 
@@ -98,12 +123,16 @@ def main():
     set_id = 23381
 
     cards = get_cards(set_id)
-    card_ids = set()
-    for card in cards["result"]:
-        card_ids.add(card["productID"])
-    card_ids = list(card_ids)
+    card_ids = get_card_ids(set_id, cards)
+
+    threads = []
     for card_id in card_ids:
-        get_card_sales(set_id, card_id)
+        thread = threading.Thread(
+            target=get_card_sales, args=(set_id, card_id))
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
 
 
 if __name__ == "__main__":
