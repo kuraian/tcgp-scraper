@@ -12,4 +12,3 @@ GET
 https://mpapi.tcgplayer.com/v2/Catalog/SetNames
 
 temporal forces set_id = 23381
-

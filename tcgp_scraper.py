@@ -125,10 +125,8 @@ def main():
     cards = get_cards(set_id)
     card_ids = get_card_ids(set_id, cards)
 
-    threads = []
     for card_id in card_ids:
         get_card_sales(set_id, card_id)
-        break
 
 
 if __name__ == "__main__":
