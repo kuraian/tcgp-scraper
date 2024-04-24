@@ -99,20 +99,20 @@ def get_card_sales(set_id, card_id):
             if not data["nextPage"] == "Yes":
                 next_page = False
             else:
-                time.sleep(random.triangular(1.2, 2.3))
+                # time.sleep(random.triangular(1.2, 2.3))
+                time.sleep(.1)
                 offset += 1
+        path = f"sets/{set_id}"
+        if not os.path.isdir(path):
+            os.mkdir(path)
+        with open(f"{path}/{card_id}.json", "w") as f:
+            f.write(json.dumps({"sales": sales}, indent=4))
+            f.close()
     except Exception as e:
         print(f"Error for card {card_id}.")
 
     custom_webdriver.close()
     time.sleep(1)
-
-    path = f"sets/{set_id}"
-    if not os.path.isdir(path):
-        os.mkdir(path)
-    with open(f"{path}/{card_id}.json", "w") as f:
-        f.write(json.dumps({"sales": sales}, indent=4))
-        f.close()
 
     return sales
 
@@ -120,13 +120,19 @@ def get_card_sales(set_id, card_id):
 def main():
     # its easier to just lookup the set ID manually than automate it
     # https://mpapi.tcgplayer.com/v2/Catalog/SetNames
-    set_id = 23381
+
+    # obsidian flames
+    set_id = 23228
 
     cards = get_cards(set_id)
     card_ids = get_card_ids(set_id, cards)
-
+    card_ids.sort()
     for card_id in card_ids:
-        get_card_sales(set_id, card_id)
+        if not os.path.isfile(f"sets/{set_id}/{card_id}.json"):
+            print(f"{card_id} does not exist!!!")
+            get_card_sales(set_id, card_id)
+        else:
+            print(f"{card_id} does exist!!!")
 
 
 if __name__ == "__main__":
